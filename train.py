@@ -2,8 +2,7 @@ import argparse
 import numpy as np
 from parl.utils import logger, tensorboard, ReplayMemory
 from env_utils import ParallelEnv, LocalEnv
-# from torch_base import TorchModel, TorchSAC, TorchAgent  # Choose base wrt which deep-learning framework you are using
-from paddle_base import PaddleModel, PaddleSAC, PaddleAgent
+from torch_base import TorchModel, TorchSAC, TorchAgent  # use PyTorch
 from env_config import EnvConfig
 
 WARMUP_STEPS = 2e3
@@ -52,8 +51,8 @@ def main():
     # Initialize model, algorithm, agent, replay_memory
     if args.framework == 'torch':
         CarlaModel, SAC, CarlaAgent = TorchModel, TorchSAC, TorchAgent
-    elif args.framework == 'paddle':
-        CarlaModel, SAC, CarlaAgent = PaddleModel, PaddleSAC, PaddleAgent
+    else:
+        print("Unsupported framework {}, please use PyTorch".format(args.framework))
     model = CarlaModel(obs_dim, action_dim)
     algorithm = SAC(
         model,
@@ -125,7 +124,7 @@ if __name__ == "__main__":
     parser.add_argument("--env", default="carla-v0")
     parser.add_argument(
         '--framework',
-        default='paddle',
+        default='torch',
         help='choose deep learning framework: torch or paddle')
     parser.add_argument(
         "--train_total_steps",
