@@ -99,6 +99,9 @@ class CarlaEnv(gym.Env):
         # Future distances to get heading
         self.distances = [1., 5., 10.]
 
+        # set spectator
+        self.spectator = self.world.get_spectator()
+
     def reset(self):
         self.current_image = None
         try:
@@ -167,10 +170,18 @@ class CarlaEnv(gym.Env):
             self.collision_sensor.listen(
                 lambda event: get_collision_hist(event))
 
+            # Add Camera sensor
             camera_transform = carla.Transform(carla.Location(x=0.8, z=1.7))
             self.camera_sensor = self.world.spawn_actor(self.camera_bp, camera_transform, attach_to=self.ego)
             self.actors.append(self.camera_sensor)
             self.camera_sensor.listen(lambda data: get_camera_rgb_images(data))
+
+            # Let spectator follow ego vehicle
+            dummy_transform = carla.Transform(carla.Location(x=10, z=10))
+            self.dummy_collision_sensor = self.world.try_spawn_actor(
+                self.collision_bp, dummy_transform, attach_to=self.ego)
+            self.actors.append(self.dummy_collision_sensor)
+            self.spectator.set_transform(self.dummy_collision_sensor.get_transform())
 
             def get_camera_rgb_images(data):
                 # data.save_to_disk('image_outputs/%.6d.jpg' % data.frame)
