@@ -1,7 +1,7 @@
 import argparse
 from env_utils import LocalEnv
 from parl.utils import logger, tensorboard
-from torch_base import TorchModel, TorchSAC, TorchAgent  # Choose base wrt which deep-learning framework you are using
+from torch_base import TorchCNNModel, TorchModel, TorchSAC, TorchAgent  # Choose base wrt which deep-learning framework you are using
 from env_config import EnvConfig
 
 EVAL_EPISODES = 3
@@ -38,7 +38,11 @@ def main():
 
     # Initialize model, algorithm, agent
     if args.framework == 'torch':
-        CarlaModel, SAC, CarlaAgent = TorchModel, TorchSAC, TorchAgent
+        SAC, CarlaAgent = TorchSAC, TorchAgent
+        if args.model == 'cnn':
+            CarlaModel = TorchCNNModel
+        else:
+            CarlaModel = TorchModel
     else:
         print("Unsupported framework {}, please use PyTorch".format(args.framework))
     model = CarlaModel(obs_dim, action_dim)
@@ -67,6 +71,7 @@ if __name__ == "__main__":
         '--framework',
         default='torch',
         help='deep learning framework: torch or paddle')
+    parser.add_argument("--model", default="fc")
     parser.add_argument(
         "--eval_episodes",
         default=10,

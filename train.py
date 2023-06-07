@@ -2,7 +2,7 @@ import argparse
 import numpy as np
 from parl.utils import logger, tensorboard, ReplayMemory
 from env_utils import ParallelEnv, LocalEnv
-from torch_base import TorchModel, TorchSAC, TorchAgent  # use PyTorch
+from torch_base import TorchCNNModel, TorchModel, TorchSAC, TorchAgent  # use PyTorch
 from env_config import EnvConfig
 
 WARMUP_STEPS = 2e3
@@ -50,7 +50,11 @@ def main():
 
     # Initialize model, algorithm, agent, replay_memory
     if args.framework == 'torch':
-        CarlaModel, SAC, CarlaAgent = TorchModel, TorchSAC, TorchAgent
+        SAC, CarlaAgent = TorchSAC, TorchAgent
+        if args.model == 'cnn':
+            CarlaModel = TorchCNNModel
+        else:
+            CarlaModel = TorchModel
     else:
         print("Unsupported framework {}, please use PyTorch".format(args.framework))
     model = CarlaModel(obs_dim, action_dim)
@@ -122,6 +126,7 @@ if __name__ == "__main__":
         default='localhost:8080',
         help='xparl address for parallel training')
     parser.add_argument("--env", default="carla-v0")
+    parser.add_argument("--model", default="fc")
     parser.add_argument(
         '--framework',
         default='torch',

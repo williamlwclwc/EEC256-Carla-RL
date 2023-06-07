@@ -40,7 +40,7 @@ class Actor(parl.Model):
         self.std_linear = nn.Linear(256, action_dim)
 
     def forward(self, obs):
-        x = F.relu(self.l1(obs))
+        x = F.relu(self.l1(obs[1]))
         x = F.relu(self.l2(x))
         x = F.relu(self.l3(x))
 
@@ -74,7 +74,7 @@ class Critic(parl.Model):
         self.l10 = nn.Linear(256, 1)
 
     def forward(self, obs, action):
-        x = torch.cat([obs, action], 1)
+        x = torch.cat([obs[1], action], 1)
 
         # Q1
         q1 = F.relu(self.l1(x))

@@ -25,6 +25,8 @@ params = {
     'desired_speed': 15,
     # maximum times to spawn ego vehicle
     'max_ego_spawn_times': 100,
+    'npc_vehicle_filter': 'vehicle.bmw*',
+    'max_npc_vehicles': 2
 }
 
 # train env params
