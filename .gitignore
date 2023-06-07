@@ -3,8 +3,8 @@
 /carla-v0_train
 
 /gym_carla/gym_carla/__pycache__
-/gym_carla/gym_carla/env/__pycache__
-/gym_carla/gym_carla.egg_info
+/gym_carla/gym_carla/envs/__pycache__
+/gym_carla/gym_carla.egg-info
 /output_logger
 /torch_base/__pycache__
 /torch_model
