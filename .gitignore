@@ -1,0 +1,11 @@
+/__pycache__
+/carla-v0_eval
+/carla-v0_train
+
+/gym_carla/gym_carla/__pycache__
+/gym_carla/gym_carla/env/__pycache__
+/gym_carla/gym_carla.egg_info
+/output_logger
+/torch_base/__pycache__
+/torch_model
+step_490040_model.ckpt

@@ -39,7 +39,7 @@ e.g.2
     set five ports --> parallel training with five envs
     train_env_ports = [2017, 2019, 2021, 2023, 2025]
 """
-train_env_ports = [2021, 2023, 2025]
+train_env_ports = [2021]
 train_code_mode = 'train'
 train_envs_params = []
 for port in train_env_ports:

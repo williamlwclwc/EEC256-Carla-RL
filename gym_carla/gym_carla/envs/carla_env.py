@@ -84,8 +84,6 @@ class CarlaEnv(gym.Env):
         self.distances = [1., 5., 10.]
 
     def reset(self):
-
-        while True:
             try:
                 self.collision_sensor = None
                 self.lane_sensor = None
@@ -166,7 +164,7 @@ class CarlaEnv(gym.Env):
                 init_speed = carla.Vector3D(
                     x=self.desired_speed * np.cos(yaw),
                     y=self.desired_speed * np.sin(yaw))
-                self.ego.set_velocity(init_speed)
+                self.ego.set_target_velocity(init_speed)
                 self.world.tick()
                 self.world.tick()
 
