@@ -37,6 +37,8 @@ class CarlaEnv(gym.Env):
         self.code_mode = params['code_mode']
         self.max_time_episode = params['max_time_episode']
         self.obs_size = params['obs_size']
+        self.img_height = self.obs_size[0]
+        self.img_width = self.obs_size[1]
         self.state_size = (self.obs_size[0], self.obs_size[1] - 36)
 
         self.desired_speed = params['desired_speed']
@@ -75,8 +77,8 @@ class CarlaEnv(gym.Env):
         # Camera sensor
         self.camera_bp = self.world.get_blueprint_library().find('sensor.camera.rgb')
 
-        self.camera_bp.set_attribute('image_size_x', '1920')
-        self.camera_bp.set_attribute('image_size_y', '1080')
+        self.camera_bp.set_attribute('image_size_x', str(self.img_width))
+        self.camera_bp.set_attribute('image_size_y', str(self.img_height))
         self.camera_bp.set_attribute('fov', '110')
         # Set the time in seconds between sensor captures
         self.camera_bp.set_attribute('sensor_tick', '1.0')
@@ -104,180 +106,182 @@ class CarlaEnv(gym.Env):
 
     def reset(self):
         self.current_image = None
-        try:
-            self.collision_sensor = None
-            self.lane_sensor = None
+        self.collision_sensor = None
+        self.lane_sensor = None
 
-            # Delete sensors, vehicles and walkers
-            while self.actors:
-                (self.actors.pop()).destroy()
+        # Delete sensors, vehicles and walkers
+        while self.actors:
+            (self.actors.pop()).destroy()
 
-            # Disable sync mode
-            self._set_synchronous_mode(False)
+        # Disable sync mode
+        self._set_synchronous_mode(False)
 
-            # Spawn the ego vehicle at a random position between start and dest
-            # Start and Destination
-            if self.task_mode == 'Straight':
-                self.route_id = 0
-            elif self.task_mode == 'Curve':
-                self.route_id = 1  #np.random.randint(2, 4)
-            elif self.task_mode == 'Long' or self.task_mode == 'Lane' or self.task_mode == 'Lane_test':
-                if self.code_mode == 'train':
-                    self.route_id = np.random.randint(0, 4)
-                elif self.code_mode == 'test':
-                    self.route_id = self.route_deterministic_id
-                    self.route_deterministic_id = (
-                        self.route_deterministic_id + 1) % 4
-            elif self.task_mode == 'U_curve':
-                self.route_id = 0
-            self.start = self.starts[self.route_id]
-            self.dest = self.dests[self.route_id]
+        # Spawn the ego vehicle at a random position between start and dest
+        # Start and Destination
+        if self.task_mode == 'Straight':
+            self.route_id = 0
+        elif self.task_mode == 'Curve':
+            self.route_id = 1  #np.random.randint(2, 4)
+        elif self.task_mode == 'Long' or self.task_mode == 'Lane' or self.task_mode == 'Lane_test':
+            if self.code_mode == 'train':
+                self.route_id = np.random.randint(0, 4)
+            elif self.code_mode == 'test':
+                self.route_id = self.route_deterministic_id
+                self.route_deterministic_id = (
+                    self.route_deterministic_id + 1) % 4
+        elif self.task_mode == 'U_curve':
+            self.route_id = 0
+        self.start = self.starts[self.route_id]
+        self.dest = self.dests[self.route_id]
 
-            # The tuple (x,y) for the current waypoint
-            self.current_wpt = np.array((self.start[0], self.start[1],
-                                            self.start[5]))
+        # The tuple (x,y) for the current waypoint
+        self.current_wpt = np.array((self.start[0], self.start[1],
+                                        self.start[5]))
 
-            ego_spawn_times = 0
-            while True:
-                if ego_spawn_times > self.max_ego_spawn_times:
-                    self.reset()
-                transform = self._set_carla_transform(self.start)
-                # Code_mode == train, spwan randomly between start and destination
-                if self.code_mode == 'train':
-                    transform = self._get_random_position_between(
+        ego_spawn_times = 0
+        while True:
+            if ego_spawn_times > self.max_ego_spawn_times:
+                self.reset()
+            transform = self._set_carla_transform(self.start)
+            # Code_mode == train, spwan randomly between start and destination
+            if self.code_mode == 'train':
+                transform = self._get_random_position_between(
+                    start=self.start,
+                    dest=self.dest,
+                    transform=transform)
+            if self._try_spawn_ego_vehicle_at(transform):
+                # spawn npc vehicles
+                npc_vehicles_spawned_idx = 0
+                while npc_vehicles_spawned_idx < self.max_npc_vehicles:
+                    transform_npc = self._get_random_position_between(
                         start=self.start,
                         dest=self.dest,
                         transform=transform)
-                if self._try_spawn_ego_vehicle_at(transform):
-                    # spawn npc vehicles
-                    npc_vehicles_spawned_idx = 0
-                    while npc_vehicles_spawned_idx < self.max_npc_vehicles:
-                        transform_npc = self._get_random_position_between(
-                            start=self.start,
-                            dest=self.dest,
-                            transform=transform)
-                        if self._try_spawn_npc_vehicle_at(transform_npc):
-                            npc_vehicles_spawned_idx += 1
-                    break
-                else:
-                    ego_spawn_times += 1
-                    time.sleep(0.1)
+                    if self._try_spawn_npc_vehicle_at(transform_npc):
+                        npc_vehicles_spawned_idx += 1
+                break
+            else:
+                ego_spawn_times += 1
+                time.sleep(0.1)
 
-            # Add collision sensor
-            self.collision_sensor = self.world.try_spawn_actor(
-                self.collision_bp, carla.Transform(), attach_to=self.ego)
-            self.actors.append(self.collision_sensor)
-            self.collision_sensor.listen(
-                lambda event: get_collision_hist(event))
+        # Add collision sensor
+        self.collision_sensor = self.world.try_spawn_actor(
+            self.collision_bp, carla.Transform(), attach_to=self.ego)
+        self.actors.append(self.collision_sensor)
+        self.collision_sensor.listen(
+            lambda event: get_collision_hist(event))
 
-            # Add Camera sensor
-            camera_transform = carla.Transform(carla.Location(x=0.8, z=1.7))
-            self.camera_sensor = self.world.spawn_actor(self.camera_bp, camera_transform, attach_to=self.ego)
-            self.actors.append(self.camera_sensor)
-            self.camera_sensor.listen(lambda data: get_camera_rgb_images(data))
+        # Add Camera sensor
+        camera_transform = carla.Transform(carla.Location(x=0.8, z=1.7))
+        self.camera_sensor = self.world.spawn_actor(self.camera_bp, camera_transform, attach_to=self.ego)
+        self.actors.append(self.camera_sensor)
+        self.camera_sensor.listen(lambda data: get_camera_rgb_images(data))
 
-            # Let spectator follow ego vehicle
-            dummy_transform = carla.Transform(carla.Location(x=10, z=10))
-            self.dummy_collision_sensor = self.world.try_spawn_actor(
-                self.collision_bp, dummy_transform, attach_to=self.ego)
-            self.actors.append(self.dummy_collision_sensor)
-            self.spectator.set_transform(self.dummy_collision_sensor.get_transform())
+        # Let spectator follow ego vehicle
+        # dummy_transform = carla.Transform(carla.Location(x=10, z=10))
+        # self.dummy_collision_sensor = self.world.try_spawn_actor(
+        #     self.collision_bp, dummy_transform, attach_to=self.ego)
+        # self.actors.append(self.dummy_collision_sensor)
 
-            def get_camera_rgb_images(data):
-                # data.save_to_disk('image_outputs/%.6d.jpg' % data.frame)
-                self.current_image = data
+        def get_camera_rgb_images(data):
+            # data.save_to_disk('image_outputs/%.6d.jpg' % data.frame)
+            self.current_image = data
 
-            def get_collision_hist(event):
-                impulse = event.normal_impulse
-                intensity = np.sqrt(impulse.x**2 + impulse.y**2 +
-                                    impulse.z**2)
-                self.collision_hist.append(intensity)
-                if len(self.collision_hist) > self.collision_hist_l:
-                    self.collision_hist.pop(0)
+        def get_collision_hist(event):
+            impulse = event.normal_impulse
+            intensity = np.sqrt(impulse.x**2 + impulse.y**2 +
+                                impulse.z**2)
+            self.collision_hist.append(intensity)
+            if len(self.collision_hist) > self.collision_hist_l:
+                self.collision_hist.pop(0)
 
-            self.collision_hist = []
+        self.collision_hist = []
 
-            # Update timesteps
-            self.time_step = 1
-            self.reset_step += 1
+        # Update timesteps
+        self.time_step = 1
+        self.reset_step += 1
 
-            # Enable sync mode
-            self.settings.synchronous_mode = True
-            self.world.apply_settings(self.settings)
+        # Enable sync mode
+        self.settings.synchronous_mode = True
+        self.world.apply_settings(self.settings)
 
-            # Set the initial speed to desired speed
-            yaw = (self.ego.get_transform().rotation.yaw) * np.pi / 180.0
-            init_speed = carla.Vector3D(
-                x=self.desired_speed * np.cos(yaw),
-                y=self.desired_speed * np.sin(yaw))
-            self.ego.set_target_velocity(init_speed)
-            self.world.tick()
-            self.world.tick()
+        # Set the initial speed to desired speed
+        yaw = (self.ego.get_transform().rotation.yaw) * np.pi / 180.0
+        init_speed = carla.Vector3D(
+            x=self.desired_speed * np.cos(yaw),
+            y=self.desired_speed * np.sin(yaw))
+        self.ego.set_target_velocity(init_speed)
+        self.world.tick()
+        self.world.tick()
 
-            # Get waypoint infomation
-            ego_x, ego_y = self._get_ego_pos()
-            self.current_wpt = self._get_waypoint_xyz()
+        # Get waypoint infomation
+        ego_x, ego_y = self._get_ego_pos()
+        self.current_wpt = self._get_waypoint_xyz()
 
-            delta_yaw, wpt_yaw, ego_yaw = self._get_delta_yaw()
-            road_heading = np.array([
-                np.cos(wpt_yaw / 180 * np.pi),
-                np.sin(wpt_yaw / 180 * np.pi)
-            ])
-            ego_heading = np.float32(ego_yaw / 180.0 * np.pi)
-            ego_heading_vec = np.array(
-                [np.cos(ego_heading),
-                    np.sin(ego_heading)])
+        delta_yaw, wpt_yaw, ego_yaw = self._get_delta_yaw()
+        road_heading = np.array([
+            np.cos(wpt_yaw / 180 * np.pi),
+            np.sin(wpt_yaw / 180 * np.pi)
+        ])
+        ego_heading = np.float32(ego_yaw / 180.0 * np.pi)
+        ego_heading_vec = np.array(
+            [np.cos(ego_heading),
+                np.sin(ego_heading)])
 
-            future_angles = self._get_future_wpt_angle(
-                distances=self.distances)
+        future_angles = self._get_future_wpt_angle(
+            distances=self.distances)
 
-            # Update State Info (Necessary?)
-            velocity = self.ego.get_velocity()
-            accel = self.ego.get_acceleration()
-            dyaw_dt = self.ego.get_angular_velocity().z
-            v_t_absolute = np.array([velocity.x, velocity.y])
-            a_t_absolute = np.array([accel.x, accel.y])
+        # Update State Info (Necessary?)
+        velocity = self.ego.get_velocity()
+        accel = self.ego.get_acceleration()
+        dyaw_dt = self.ego.get_angular_velocity().z
+        v_t_absolute = np.array([velocity.x, velocity.y])
+        a_t_absolute = np.array([accel.x, accel.y])
 
-            # decompose v and a to tangential and normal in ego coordinates
-            v_t = _vec_decompose(v_t_absolute, ego_heading_vec)
-            a_t = _vec_decompose(a_t_absolute, ego_heading_vec)
+        # decompose v and a to tangential and normal in ego coordinates
+        v_t = _vec_decompose(v_t_absolute, ego_heading_vec)
+        a_t = _vec_decompose(a_t_absolute, ego_heading_vec)
 
-            # Reset action of last time step
-            # TODO:[another kind of action]
-            self.last_action = np.array([0.0, 0.0])
+        # Reset action of last time step
+        # TODO:[another kind of action]
+        self.last_action = np.array([0.0, 0.0])
 
-            pos_err_vec = np.array((ego_x, ego_y)) - self.current_wpt[0:2]
+        pos_err_vec = np.array((ego_x, ego_y)) - self.current_wpt[0:2]
 
-            self.state_info['velocity_t'] = v_t
-            self.state_info['acceleration_t'] = a_t
+        self.state_info['velocity_t'] = v_t
+        self.state_info['acceleration_t'] = a_t
 
-            # self.state_info['ego_heading'] = ego_heading
-            self.state_info['delta_yaw_t'] = delta_yaw
-            self.state_info['dyaw_dt_t'] = dyaw_dt
+        # self.state_info['ego_heading'] = ego_heading
+        self.state_info['delta_yaw_t'] = delta_yaw
+        self.state_info['dyaw_dt_t'] = dyaw_dt
 
-            self.state_info['lateral_dist_t'] = np.linalg.norm(pos_err_vec) * \
-                                                np.sign(pos_err_vec[0] * road_heading[1] - \
-                                                        pos_err_vec[1] * road_heading[0])
-            self.state_info['action_t_1'] = self.last_action
-            self.state_info['angles_t'] = future_angles
+        self.state_info['lateral_dist_t'] = np.linalg.norm(pos_err_vec) * \
+                                            np.sign(pos_err_vec[0] * road_heading[1] - \
+                                                    pos_err_vec[1] * road_heading[0])
+        self.state_info['action_t_1'] = self.last_action
+        self.state_info['angles_t'] = future_angles
 
-            # End State variable initialized
-            self.isCollided = False
-            self.isTimeOut = False
-            # self.isSuccess = False
-            self.isOutOfLane = False
-            self.isSpecialSpeed = False
+        # End State variable initialized
+        self.isCollided = False
+        self.isTimeOut = False
+        # self.isSuccess = False
+        self.isOutOfLane = False
+        self.isSpecialSpeed = False
 
-            return self._get_obs(), copy.deepcopy(self.state_info)
+        return self._get_obs(), copy.deepcopy(self.state_info)
 
-        except Exception as e:
-            self.logger.error("Env reset() error")
-            self.logger.error(e)
-            time.sleep(2)
-            self._make_carla_client('localhost', self.port)
+        # except Exception as e:
+        #     self.logger.error("Env reset() error")
+        #     self.logger.error(e)
+        #     time.sleep(2)
+        #     self._make_carla_client('localhost', self.port)
 
     def step(self, action):
-
+        bird_view_ego_transform = carla.Transform()
+        bird_view_ego_transform.location = self.ego.get_location()
+        bird_view_ego_transform.location.z = bird_view_ego_transform.location.z + 30
+        bird_view_ego_transform.rotation.pitch = -90
+        self.spectator.set_transform(bird_view_ego_transform)
         try:
             # Assign acc/steer/brake to action signal
             # Ver. 1 input is the value of control signal
@@ -539,9 +543,23 @@ class CarlaEnv(gym.Env):
 
     def _get_obs(self):
         # [img version]
-        img_height = self.current_image.height
-        img_width = self.current_image.width
-        rgb_obs = self.current_image.raw_data.reshape(img_height, img_width, 3).copy()
+        if self.current_image is None:
+            rgb_obs = np.zeros((self.img_height, self.img_width, 3))
+        else:
+            def to_bgra_array(image):
+                """Convert a CARLA raw image to a BGRA numpy array."""
+                array = np.frombuffer(image.raw_data, dtype=np.dtype("uint8"))
+                array = np.reshape(array, (image.height, image.width, 4))
+                return array
+
+            def to_rgb_array(image):
+                """Convert a CARLA raw image to a RGB numpy array."""
+                array = to_bgra_array(image)
+                # Convert BGRA to RGB.
+                array = array[:, :, :3]
+                array = array[:, :, ::-1]
+                return array
+            rgb_obs = to_rgb_array(self.current_image) / 255.0
         # return np.float32(current_obs / 255.0)
 
         # [vec version]

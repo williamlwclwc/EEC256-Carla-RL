@@ -8,11 +8,11 @@ import torchvision
 LOG_SIG_MAX = 2.0
 LOG_SIG_MIN = -20.0
 
-__all__ = ['TorchModel']
+__all__ = ['TorchCNNModel']
 
 def get_pretrained_model(model='resnet18', weight='IMAGENET1K_V1', freeze=True):
     if model == 'resnet18':
-        model = torchvision.models.resnet18(weight=weight)
+        model = torchvision.models.resnet18(weights=weight)
     num_ftrs = model.fc.in_features
     if freeze:
         for param in model.parameters():
@@ -47,6 +47,8 @@ class Actor(parl.Model):
             nn.ReLU()
         )
 
+        self.pretrained.fc = self.Linear_layer
+
         self.mean_linear1 = nn.Linear(256, 256)
         self.mean_linear2 = nn.Linear(256, 256)
         self.mean_linear = nn.Linear(256, action_dim)
@@ -56,7 +58,8 @@ class Actor(parl.Model):
         self.std_linear = nn.Linear(256, action_dim)
 
     def forward(self, obs):
-        x = self.Linear_layer(self.pretrained(obs[0]))
+        x = obs[0].permute(0, 3, 1, 2)
+        x = self.pretrained(x)
 
         act_mean = F.relu(self.mean_linear1(x))
         act_mean = F.relu(self.mean_linear2(act_mean))
@@ -75,8 +78,10 @@ class Critic(parl.Model):
 
         self.pretrained, self.num_ftrs = get_pretrained_model()
 
+        self.pretrained.fc = nn.Linear(self.num_ftrs, 256)
+
         self.Linear_layer = nn.Sequential(
-            nn.Linear(self.num_ftrs+action_dim, 256),
+            nn.Linear(256 + action_dim, 256),
             nn.ReLU(),
             nn.Linear(256, 256),
             nn.ReLU(),
@@ -87,8 +92,10 @@ class Critic(parl.Model):
             nn.Linear(256, 1)
         )
 
+
     def forward(self, obs, action):
-        x = self.pretrained(obs[0])
+        x = obs[0].permute(0, 3, 1, 2)
+        x = self.pretrained(x)
         x = torch.cat([x, action], 1)
         q1 = self.Linear_layer(x)
         q2 = self.Linear_layer(x)

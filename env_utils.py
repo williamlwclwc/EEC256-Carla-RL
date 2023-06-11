@@ -23,7 +23,7 @@ class ParallelEnv(object):
     def reset(self):
         obs_list = [env.reset() for env in self.env_list]
         obs_list = [obs.get() for obs in obs_list]
-        self.obs_list = np.array(obs_list)
+        self.obs_list = np.array(obs_list, dtype=object)
         return self.obs_list
 
     def step(self, action_list):

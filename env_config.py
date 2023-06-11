@@ -8,7 +8,7 @@ TASK_MODE = 'Lane'
 MAX_EPISODE_STEPS = 250
 params = {
     # screen size of cv2 window
-    'obs_size': (160, 100),
+    'obs_size': (64, 64),
     # time interval between two frames
     'dt': 0.025,
     # filter for defining ego vehicle
@@ -26,7 +26,7 @@ params = {
     # maximum times to spawn ego vehicle
     'max_ego_spawn_times': 100,
     'npc_vehicle_filter': 'vehicle.bmw*',
-    'max_npc_vehicles': 2
+    'max_npc_vehicles': 0
 }
 
 # train env params

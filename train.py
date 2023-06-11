@@ -31,6 +31,15 @@ def run_evaluate_episodes(agent, env, eval_episodes):
     avg_reward /= eval_episodes
     return avg_reward
 
+def flatten_img(img):
+    height, width, channels = img.shape
+    return img.reshape((height * width * channels))
+
+def restore_batch_obs(batch_obs, batch_size, img_height, img_width):
+    img_obs = batch_obs[:, :img_height * img_width * 3]
+    vec_obs = batch_obs[:, img_height * img_width * 3:]
+    img_obs = img_obs.reshape((batch_size, img_height, img_width, 3))
+    return [img_obs, vec_obs]
 
 def main():
     logger.info("-----------------Carla_SAC-------------------")
@@ -45,7 +54,10 @@ def main():
     eval_env_params = EnvConfig['eval_env_params']
     eval_env = LocalEnv(args.env, eval_env_params)
 
-    obs_dim = eval_env.obs_dim
+    # image shape
+    img_height, img_width = train_envs_params[0]['obs_size']
+
+    obs_dim = eval_env.obs_dim + img_height * img_width * 3
     action_dim = eval_env.action_dim
 
     # Initialize model, algorithm, agent, replay_memory
@@ -74,7 +86,7 @@ def main():
     test_flag = 0
 
     obs_list = env_list.reset()
-
+    
     while total_steps < args.train_total_steps:
         # Train episode
         if rpm.size() < WARMUP_STEPS:
@@ -87,10 +99,15 @@ def main():
         next_obs_list, reward_list, done_list, info_list = env_list.step(
             action_list)
 
-        # Store data in replay memory
+        # Store image data in replay memory
         for i in range(env_num):
-            rpm.append(obs_list[i], action_list[i], reward_list[i],
-                       next_obs_list[i], done_list[i])
+            img_obs = flatten_img(obs_list[i][0])
+            vec_obs = obs_list[i][1]
+            next_img_obs = flatten_img(next_obs_list[i][0])
+            next_vec_obs = next_obs_list[i][1]
+            obs = np.concatenate((img_obs, vec_obs))
+            next_obs = np.concatenate((next_img_obs, next_vec_obs))
+            rpm.append(obs, action_list[i], reward_list[i], next_obs, done_list[i])
 
         obs_list = env_list.get_obs()
         total_steps = env_list.total_steps
@@ -98,7 +115,9 @@ def main():
         if rpm.size() >= WARMUP_STEPS:
             batch_obs, batch_action, batch_reward, batch_next_obs, batch_terminal = rpm.sample_batch(
                 BATCH_SIZE)
-            agent.learn(batch_obs, batch_action, batch_reward, batch_next_obs,
+            batch_obs = restore_batch_obs(batch_obs, BATCH_SIZE, img_height, img_width)
+            batch_obs_next = restore_batch_obs(batch_next_obs, BATCH_SIZE, img_height, img_width)
+            agent.learn(batch_obs, batch_action, batch_reward, batch_obs_next,
                         batch_terminal)
 
         # Save agent
